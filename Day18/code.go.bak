@@ -1,0 +1,181 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"slices"
+	"strings"
+)
+
+type Graph map[string]map[string]int
+
+type State struct {
+	node  string
+	moves int
+	keys  []string
+	path  []string
+	graph Graph
+}
+
+func flood_fill(start [2]int, maze map[[2]int]byte) map[string]int {
+	front := [][3]int{{start[0], start[1], 0}}
+	visited := map[[2]int]int{}
+	reachable := map[string]int{}
+	var state [3]int
+	for len(front) > 0 {
+		state, front = front[0], front[1:]
+		pos := [2]int{state[0], state[1]}
+		visited[pos] = state[2]
+		for d := 1; d <= 4; d++ {
+			trial_pos := pos
+			switch d {
+			case 1:
+				trial_pos[1]--
+			case 2:
+				trial_pos[1]++
+			case 3:
+				trial_pos[0]--
+			case 4:
+				trial_pos[0]++
+			}
+			if _, ok := visited[trial_pos]; !ok {
+				dest := maze[trial_pos]
+				if dest == 46 {
+					front = append(front, [3]int{trial_pos[0], trial_pos[1], state[2] + 1})
+				} else if (dest >= 64 && dest <= 90) || (dest >= 97 && dest <= 122) {
+					reachable[string(dest)] = state[2] + 1
+				}
+			}
+		}
+	}
+	return reachable
+}
+
+func is_key(node string) bool {
+	return node[0] >= 97 && node[0] <= 122
+}
+
+func is_door(node string) bool {
+	return node[0] >= 64 && node[0] <= 90
+}
+
+func load_input(filename string) Graph {
+	content, _ := os.ReadFile(filename)
+	lines := strings.Split(string(content), "\r\n")
+	maze := map[[2]int]byte{}
+	graph := Graph{}
+	for y, line := range lines {
+		for x := 0; x < len(line); x++ {
+			maze[[2]int{x, y}] = line[x]
+		}
+		for k, v := range maze {
+			s := string(v)
+			if is_key(s) || is_door(s) {
+				graph[s] = flood_fill(k, maze)
+			}
+		}
+	}
+	return graph
+}
+
+func copy_graph(graph Graph) Graph {
+	out := Graph{}
+	for k1, v1 := range graph {
+		out[k1] = map[string]int{}
+		for k2, v2 := range v1 {
+			out[k1][k2] = v2
+		}
+	}
+	return out
+}
+
+func remove_node(graph Graph, node string) {
+	neighbors := []string{}
+	for k := range graph[node] {
+		neighbors = append(neighbors, k)
+	}
+	// connect neighbors together
+	for i := 0; i < len(neighbors); i++ {
+		n1 := neighbors[i]
+		for j := i + 1; j < len(neighbors); j++ {
+			n2 := neighbors[j]
+			a, b := graph[node][n1], graph[node][n2]
+			c, d := graph[n1][n2], a+b
+			if c == 0 || d < c {
+				graph[n1][n2] = d
+				graph[n2][n1] = d
+			}
+		}
+	}
+	// remove the node
+	delete(graph, node)
+	for k := range graph {
+		delete(graph[k], node)
+	}
+}
+
+func minimum_distance(graph Graph) int {
+	m := 1<<63 - 1
+	for _, v := range graph {
+		for _, d := range v {
+			if d < m {
+				m = d
+			}
+		}
+	}
+	return m
+}
+
+func DFS(graph Graph) int {
+	front := []State{{node: "@", moves: 0, keys: []string{}, graph: graph}}
+	best := 1<<63 - 1
+	min_cost := minimum_distance(graph)
+	fmt.Printf("Minimum cost per edge: %d\n", min_cost)
+	var state State
+	for len(front) > 0 {
+		l := len(front)
+		state, front = front[l-1], front[:l-1] // DFS
+		// check if we are at the last node
+		if len(state.graph) == 1 {
+			if state.moves < best {
+				best = state.moves
+				fmt.Printf("New best: %d (path %v)\n", best, state.path)
+			}
+			continue
+		}
+		// update the graph (remove the current already visited node, it's irrelevant now)
+		new_graph := copy_graph(state.graph)
+		remove_node(new_graph, state.node)
+		// check where we can go next
+		for next, dist := range state.graph[state.node] {
+			if state.moves+dist+len(state.graph)*min_cost >= best {
+				continue
+			}
+			if is_key(next) || (is_door(next) && slices.Contains(state.keys, strings.ToLower(next))) {
+				new_state := State{
+					node:  next,
+					moves: state.moves + dist,
+					graph: new_graph,
+				}
+				new_state.keys = make([]string, len(state.keys))
+				copy(new_state.keys, state.keys)
+				new_state.path = make([]string, len(state.path)+1)
+				copy(new_state.path, state.path)
+				new_state.path[len(state.path)] = next
+				if is_key(next) {
+					new_state.keys = append(new_state.keys, next)
+				}
+				front = append(front, new_state)
+			}
+		}
+	}
+	return best
+}
+
+func main() {
+	graph := load_input("input.txt")
+
+	// Part 1
+	best := DFS(graph)
+	fmt.Printf("%v\n", best)
+}
