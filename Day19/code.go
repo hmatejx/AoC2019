@@ -5,32 +5,36 @@ import (
 	"fmt"
 )
 
-func check(robot *intcode.IntcodeCPU, x, y int) bool {
+var robot *intcode.IntcodeCPU
+
+func check(x, y int) bool {
 	robot.Reset()
 	res, _ := robot.Run([]int{x, y})
 	return res[0] > 0
 }
 
 func main() {
-	robot := intcode.NewIntcodeCPU()
+	robot = intcode.NewIntcodeCPU()
 	robot.Load("input.txt")
+
+	// part 1
 	total := 0
-	size := 50
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			if check(robot, x, y) {
+	for y := 0; y < 50; y++ {
+		for x := 0; x < 50; x++ {
+			if check(x, y) {
 				total += 1
 			}
 		}
 	}
 	fmt.Printf("Part 1: %d\n", total)
 
+	// part 2
 	x, y := 0, 0
-	for !check(robot, x+99, y) {
+	for !check(x+99, y) {
 		y += 1
-		for !check(robot, x, y+99) {
+		for !check(x, y+99) {
 			x += 1
 		}
 	}
-	fmt.Printf("%d\n", x*100*100+y)
+	fmt.Printf("Part 2: %d\n", x*100*100+y)
 }
