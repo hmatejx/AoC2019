@@ -7,35 +7,35 @@ import (
 	"strings"
 )
 
-type Graph map[string]map[string]int
+type Graph map[byte]map[byte]int
 
-func flood_fill(start [2]int, maze map[[2]int]byte) map[string]int {
-	front := [][3]int{{start[0], start[1], 0}}
+func flood_fill(startx, starty int, maze [][]byte) map[byte]int {
+	front := [][3]int{{startx, starty, 0}}
 	visited := map[[2]int]int{}
-	reachable := map[string]int{}
+	reachable := map[byte]int{}
 	var state [3]int
 	for len(front) > 0 {
 		state, front = front[0], front[1:]
-		pos := [2]int{state[0], state[1]}
-		visited[pos] = state[2]
+		x, y := state[0], state[1]
+		visited[[2]int{x, y}] = state[2]
 		for d := 1; d <= 4; d++ {
-			trial_pos := pos
+			newx, newy := x, y
 			switch d {
 			case 1:
-				trial_pos[1]--
+				newy--
 			case 2:
-				trial_pos[1]++
+				newy++
 			case 3:
-				trial_pos[0]--
+				newx--
 			case 4:
-				trial_pos[0]++
+				newx++
 			}
-			if _, ok := visited[trial_pos]; !ok {
-				dest := maze[trial_pos]
-				if dest == 46 {
-					front = append(front, [3]int{trial_pos[0], trial_pos[1], state[2] + 1})
-				} else if (dest >= 64 && dest <= 90) || (dest >= 97 && dest <= 122) {
-					reachable[string(dest)] = state[2] + 1
+			if _, ok := visited[[2]int{newx, newy}]; !ok {
+				dest := maze[newy][newx]
+				if dest == '.' {
+					front = append(front, [3]int{newx, newy, state[2] + 1})
+				} else if (dest >= '@' && dest <= 'Z') || (dest >= 'a' && dest <= 'z') {
+					reachable[dest] = state[2] + 1
 				}
 			}
 		}
@@ -43,27 +43,24 @@ func flood_fill(start [2]int, maze map[[2]int]byte) map[string]int {
 	return reachable
 }
 
-func is_key(node string) bool {
-	return node[0] >= 97 && node[0] <= 122
-}
-
-func is_door(node string) bool {
-	return node[0] >= 64 && node[0] <= 90
-}
-
 func load_input(filename string) Graph {
 	content, _ := os.ReadFile(filename)
 	lines := strings.Split(string(content), "\r\n")
-	maze := map[[2]int]byte{}
+	maze := make([][]byte, len(lines))
+	for y := range maze {
+		maze[y] = make([]byte, len(lines[0]))
+	}
 	graph := Graph{}
 	for y, line := range lines {
 		for x := 0; x < len(line); x++ {
-			maze[[2]int{x, y}] = line[x]
+			maze[y][x] = line[x]
 		}
-		for k, v := range maze {
-			s := string(v)
-			if is_key(s) || is_door(s) {
-				graph[s] = flood_fill(k, maze)
+	}
+	for y := range maze {
+		for x, v := range maze[y] {
+			//s := string(v)
+			if (v >= '@' && v <= 'Z') || (v >= 'a' && v <= 'z') {
+				graph[v] = flood_fill(x, y, maze)
 			}
 		}
 	}
@@ -73,7 +70,7 @@ func load_input(filename string) Graph {
 func copy_graph(graph Graph) Graph {
 	out := Graph{}
 	for k1, v1 := range graph {
-		out[k1] = map[string]int{}
+		out[k1] = map[byte]int{}
 		for k2, v2 := range v1 {
 			out[k1][k2] = v2
 		}
@@ -81,8 +78,8 @@ func copy_graph(graph Graph) Graph {
 	return out
 }
 
-func remove_node(graph Graph, node string) {
-	neighbors := []string{}
+func remove_node(graph Graph, node byte) {
+	neighbors := []byte{}
 	for k := range graph[node] {
 		neighbors = append(neighbors, k)
 	}
@@ -109,9 +106,9 @@ func remove_node(graph Graph, node string) {
 }
 
 type State struct {
-	node  string
+	node  byte
 	moves int
-	path  []string
+	keys  string
 	graph Graph
 }
 
@@ -144,21 +141,9 @@ func (h *StateHeap) Pop() any {
 }
 
 func collect_keys(graph Graph) int {
-
-	node_state := func(path []string, current_node string) string {
-		p := make([]string, len(path))
-		copy(p, path)
-		slices.Sort(p)
-		pstr := ""
-		for _, c := range p {
-			pstr += c
-		}
-		return pstr + current_node
-	}
-
-	visited := map[string]bool{}
+	visited := map[string]int{}
 	front := StateHeap{}
-	front.Push(&State{node: "@", moves: 0, graph: graph})
+	front.Push(&State{node: '@', moves: 0, graph: graph})
 	best := 1<<63 - 1
 	for len(front) > 0 {
 		state := front.Pop().(*State)
@@ -166,33 +151,36 @@ func collect_keys(graph Graph) int {
 		if len(state.graph) <= 1 {
 			if state.moves < best {
 				best = state.moves
-				fmt.Printf("New best: %d %v\n", best, state.path)
+				fmt.Printf("New best: %d\n", best)
 			}
 			continue
 		}
-		visited[node_state(state.path, state.node)] = true
+		state_str := state.keys + string(state.node)
+		// we've been here before faster
+		seen := visited[state_str]
+		if seen > 0 && seen <= state.moves {
+			continue
+		}
+		visited[state_str] = state.moves
 		// check which key we can pick up next
 		for next, dist := range state.graph[state.node] {
-			if is_key(next) {
-				if visited[node_state(state.path, next)] {
-					continue
-				}
+			if next >= 'a' && next <= 'z' {
 				// update the graph, remove the current node and the corresponding door if it exists
 				new_graph := copy_graph(state.graph)
 				remove_node(new_graph, state.node)
-				key_node := strings.ToUpper(next)
-				if _, ok := new_graph[key_node]; ok {
-					remove_node(new_graph, key_node)
+				door_node := strings.ToUpper(string(next))[0]
+				if _, ok := new_graph[door_node]; ok {
+					remove_node(new_graph, door_node)
 				}
+				// push new state to heap
+				new_keys := append([]byte(state.keys), next)
+				slices.Sort(new_keys)
 				new_state := State{
 					node:  next,
 					moves: state.moves + dist,
+					keys:  string(new_keys),
 					graph: new_graph,
 				}
-				lp := len(state.path)
-				new_state.path = make([]string, lp+1)
-				copy(new_state.path, state.path)
-				new_state.path[lp] = next
 				front.Push(&new_state)
 			}
 		}
@@ -201,9 +189,9 @@ func collect_keys(graph Graph) int {
 }
 
 func main() {
-	graph := load_input("test.txt")
+	graph := load_input("input.txt")
 
 	// Part 1
 	best := collect_keys(graph)
-	fmt.Printf("%v\n", best)
+	fmt.Printf("%d\n", best)
 }
