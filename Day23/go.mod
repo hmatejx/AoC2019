@@ -1,0 +1,3 @@
+module AoC2019/Day23/code
+
+go 1.21.5

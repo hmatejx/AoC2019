@@ -193,5 +193,5 @@ func main() {
 
 	// Part 1
 	best := collect_keys(graph)
-	fmt.Printf("%d\n", best)
+	fmt.Printf("Part 1: %d\n", best)
 }
