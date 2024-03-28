@@ -92,42 +92,45 @@ func count_neighbors(level, i, j int, recursive bool) (neigh byte) {
 func evolve(recursive bool) {
 	// get list of levels
 	levels := map_keys(grid_map)
-	slices.Sort(levels)
 	minlev, maxlev := slices.Min(levels)-1, slices.Max(levels)+1
-	// add a minimum and maximum level grid
+	// when recursive add an upper and lower level
 	if recursive {
-		levels = append([]int{minlev}, levels...)
-		levels = append(levels, maxlev)
-		grid_storage = append(grid_storage, empty_grid, empty_grid)
-		grid_map[minlev] = &grid_storage[len(grid_storage)-2]
-		grid_map[maxlev] = &grid_storage[len(grid_storage)-1]
+		levels = append(levels, minlev, maxlev)
 	}
 	// count neighbors
 	neigh := make([]grid, len(levels))
 	for k, l := range levels {
+		n := &neigh[k]
 		for i := 0; i < 5; i++ {
 			for j := 0; j < 5; j++ {
-				if recursive && i == 2 && j == 2 {
+				if i == 2 && j == 2 && recursive {
 					continue
 				}
-				neigh[k][i][j] = count_neighbors(l, i, j, recursive)
+				n[i][j] = count_neighbors(l, i, j, recursive)
 			}
 		}
 	}
 	// update grids
 	for k, l := range levels {
+		g := get_level(l)
 		for i := 0; i < 5; i++ {
 			for j := 0; j < 5; j++ {
-				if recursive && i == 2 && j == 2 {
+				if i == 2 && j == 2 && recursive {
 					continue
 				}
-				if grid_map[l][i][j] == 1 {
+				if g[i][j] == 1 {
 					if neigh[k][i][j] != 1 {
-						grid_map[l][i][j] = 0
+						g[i][j] = 0
 					}
 				} else {
 					if neigh[k][i][j] == 1 || neigh[k][i][j] == 2 {
-						grid_map[l][i][j] = 1
+						// add a new grid to the storage and map if necessary
+						if g == &empty_grid && recursive {
+							grid_storage = append(grid_storage, empty_grid)
+							g = &grid_storage[len(grid_storage)-1]
+							grid_map[l] = g
+						}
+						g[i][j] = 1
 					}
 				}
 			}
@@ -141,12 +144,10 @@ func display(level int, recursive bool) {
 		for j := 0; j < 5; j++ {
 			if recursive && i == 2 && j == 2 {
 				fmt.Print("?")
+			} else if g[i][j] == 1 {
+				fmt.Print("#")
 			} else {
-				if g[i][j] == 1 {
-					fmt.Print("#")
-				} else {
-					fmt.Print(".")
-				}
+				fmt.Print(".")
 			}
 		}
 		fmt.Println()
@@ -166,10 +167,9 @@ func biodiversity(g *grid) (res uint32) {
 }
 
 func setup(initial grid) {
-	// clear the grid storage
+	// (re-)initialize the grid storage and mapping
 	grid_storage = nil
 	grid_storage = append(grid_storage, initial)
-	// clear the level -> grid mapping
 	clear(grid_map)
 	grid_map[0] = &grid_storage[0]
 }
